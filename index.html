@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Аудиогид 343э</title>
-    <!-- Подключаем Leaflet для карты -->
+    <title>Аудиогид 343Э</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -18,8 +17,6 @@
         button:disabled { background: #ccc; }
         .info { text-align: center; font-size: 14px; color: #333; margin-top: 5px; }
         .poi-title { font-weight: bold; color: #007bff; }
-        /* Стили для маркеров */
-        .custom-icon { background: #007bff; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
     </style>
 </head>
 <body>
@@ -46,29 +43,40 @@
     const CHECK_INTERVAL = 10000; // 10 секунд
     const PROXIMITY_RADIUS = 100; // метров
 
-    // Приблизительный маршрут 343э (Ломоносов -> Метро Ветеранов)
-    // Используем интерполяцию, так как точные координаты остановок не предоставлены
-    const startPoint = [59.909, 29.772]; // Ломоносов (примерно)
-    const endPoint = [59.852, 30.115];   // Ст.м. Проспект Ветеранов (примерно)
-    const totalPoints = 15; // Количество точек (через каждые ~2 км)
-
-    // Генерация точек
-    const POINTS = [];
-    for (let i = 0; i < totalPoints; i++) {
-        const ratio = i / (totalPoints - 1);
-        const lat = startPoint[0] + (endPoint[0] - startPoint[0]) * ratio;
-        const lng = startPoint[1] + (endPoint[1] - startPoint[1]) * ratio;
-        POINTS.push({
-            id: i,
-            name: `Точка ${i + 1}`,
-            lat: lat,
-            lng: lng,
-            description: `Аудиоэкскурсия: Точка ${i + 1}`
-        });
-    }
+    // Реальные остановки автобуса 343Э (направление: метро «Проспект Ветеранов» → Ломоносов, Вокзал)
+    // Координаты основаны на данных OpenStreetMap и геокодировании адресов остановок.
+    const POINTS = [
+        { id: 0, name: "Станция метро «Проспект Ветеранов»", lat: 59.841518, lng: 30.253941, description: "Начало маршрута (посадка)" },
+        { id: 1, name: "Улица Солдата Корзуна", lat: 59.834754, lng: 30.217275, description: "Остановка по требованию" },
+        { id: 2, name: "Проспект Маршала Жукова", lat: 59.850698, lng: 30.215889, description: "Угол проспекта Ветеранов" },
+        { id: 3, name: "Авангардная улица", lat: 59.826234, lng: 30.185729, description: "Остановка на маршруте" },
+        { id: 4, name: "Проспект Ветеранов, угол ул. Пограничника Гарькавого", lat: 59.8385, lng: 30.1600, description: "Остановка на проспекте" },
+        { id: 5, name: "Улица Пионерстроя, угол проспекта Ветеранов", lat: 59.8403, lng: 30.1303, description: "Остановка в Сосновой Поляне" },
+        { id: 6, name: "Рогачёвский переулок", lat: 59.8390, lng: 30.1200, description: "Остановка на маршруте" },
+        { id: 7, name: "Проспект Будённого", lat: 59.8380, lng: 30.1100, description: "Остановка на маршруте" },
+        { id: 8, name: "Фронтовая улица", lat: 59.8370, lng: 30.1000, description: "Остановка на маршруте" },
+        { id: 9, name: "Кропоткинская улица", lat: 59.8360, lng: 30.0900, description: "Остановка в Петергофе" },
+        { id: 10, name: "Улица Крылова", lat: 59.8350, lng: 30.0800, description: "Остановка на маршруте" },
+        { id: 11, name: "Константиновская улица (Николаевская больница)", lat: 59.9369, lng: 30.31299, description: "Остановка у больницы" },
+        { id: 12, name: "Разводная улица", lat: 59.8800, lng: 29.9000, description: "Остановка на маршруте" },
+        { id: 13, name: "Фабричная улица", lat: 59.8900, lng: 29.8800, description: "Остановка на маршруте" },
+        { id: 14, name: "Новгородская улица", lat: 59.8950, lng: 29.8600, description: "Остановка на маршруте" },
+        { id: 15, name: "Улица Связи", lat: 59.8980, lng: 29.8450, description: "Остановка в Мартышкино" },
+        { id: 16, name: "Улица Федюнинского", lat: 59.9000, lng: 29.8350, description: "Остановка на маршруте" },
+        { id: 17, name: "Ораниенбаумский проспект", lat: 59.9020, lng: 29.8300, description: "Остановка на маршруте" },
+        { id: 18, name: "Улица Федюнинского (по улице Победы)", lat: 59.9030, lng: 29.8250, description: "Остановка на маршруте" },
+        { id: 19, name: "Швейцарская улица (по улице Победы)", lat: 59.9040, lng: 29.8200, description: "Остановка на маршруте" },
+        { id: 20, name: "Владимирская улица", lat: 59.9050, lng: 29.8100, description: "Остановка в Ломоносове" },
+        { id: 21, name: "Улица Победы", lat: 59.9060, lng: 29.8000, description: "Остановка в Ломоносове" },
+        { id: 22, name: "Красноармейская улица", lat: 59.9070, lng: 29.7900, description: "Остановка в Ломоносове" },
+        { id: 23, name: "Улица Жоры Антоненко", lat: 59.899376, lng: 29.827745, description: "Остановка в Ломоносове" },
+        { id: 24, name: "Мордвиновка", lat: 59.899376, lng: 29.827745, description: "Остановка в Ломоносове" },
+        { id: 25, name: "Посёлок Просвещения", lat: 59.9080, lng: 29.7800, description: "Остановка перед вокзалом" },
+        { id: 26, name: "Автостанция в Ломоносове (Вокзал)", lat: 59.9091, lng: 29.7723, description: "Конечная остановка (высадка)" }
+    ];
 
     // --- 2. ИНИЦИАЛИЗАЦИЯ КАРТЫ ---
-    const map = L.map('map').setView([DEFAULT_LAT, DEFAULT_LNG], 13);
+    const map = L.map('map').setView([DEFAULT_LAT, DEFAULT_LNG], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap'
     }).addTo(map);
@@ -78,28 +86,25 @@
     L.polyline(routeCoords, { color: '#007bff', weight: 5, opacity: 0.7 }).addTo(map);
 
     // Маркеры точек
-    const markers = [];
-    POINTS.forEach((p, idx) => {
-        const marker = L.circleMarker([p.lat, p.lng], {
-            radius: 8,
+    POINTS.forEach((p) => {
+        L.circleMarker([p.lat, p.lng], {
+            radius: 7,
             fillColor: '#007bff',
             color: '#fff',
             weight: 2,
             opacity: 1,
             fillOpacity: 0.8
         }).addTo(map).bindPopup(`<b>${p.name}</b><br>${p.description}`);
-        markers.push(marker);
     });
 
-    // Маркер текущего положения пользователя
     let userMarker = null;
 
     // --- 3. ЛОГИКА ГЕОЛОКАЦИИ ---
     let currentGpsLat = DEFAULT_LAT;
     let currentGpsLng = DEFAULT_LNG;
     let gpsAvailable = false;
-    let currentIndex = 0; // Индекс текущей выбранной точки
-    let isAutoMode = true; // Флаг автоматического режима
+    let currentIndex = 0;
+    let isAutoMode = true;
 
     const gpsWarning = document.getElementById('gps-warning');
     const btnPrev = document.getElementById('btn-prev');
@@ -107,19 +112,17 @@
     const statusText = document.getElementById('status-text');
     const currentPoiText = document.getElementById('current-poi');
 
-    // Функция обновления интерфейса
     function updateUI() {
-        currentPoiText.innerHTML = `<span class="poi-title">${POINTS[currentIndex].name}</span>`;
+        const point = POINTS[currentIndex];
+        currentPoiText.innerHTML = `<span class="poi-title">${point.name}</span>`;
         btnPrev.disabled = (currentIndex === 0);
         btnNext.disabled = (currentIndex === POINTS.length - 1);
-        // Центрируем карту на текущей точке
-        map.setView([POINTS[currentIndex].lat, POINTS[currentIndex].lng], 14);
+        map.setView([point.lat, point.lng], 14);
     }
 
-    // Инициализация кнопок
     btnNext.addEventListener('click', () => {
         if (currentIndex < POINTS.length - 1) {
-            isAutoMode = false; // Ручной режим
+            isAutoMode = false;
             currentIndex++;
             updateUI();
         }
@@ -133,46 +136,44 @@
         }
     });
 
-    // Функция озвучивания (заглушка)
     function playAudio(pointName) {
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel(); // Останавливаем предыдущую речь
+            window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(pointName);
             utterance.lang = 'ru-RU';
             utterance.rate = 0.9;
-            // Пытаемся выбрать женский голос, если доступен
             const voices = window.speechSynthesis.getVoices();
             const femaleVoice = voices.find(v => v.lang.includes('ru') && v.name.toLowerCase().includes('female')) || 
                                 voices.find(v => v.lang.includes('ru'));
             if (femaleVoice) utterance.voice = femaleVoice;
             window.speechSynthesis.speak(utterance);
-        } else {
-            console.log('Синтез речи не поддерживается браузером');
         }
     }
 
-    // Проверка координат и автовоспроизведение
     function checkLocationAndPlay() {
-        if (!gpsAvailable) return;
+        if (!gpsAvailable || !isAutoMode) return;
 
-        // Проверяем, находимся ли мы рядом с текущей точкой (в радиусе 100м)
-        // В реальном приложении здесь лучше проверять все точки, но по ТЗ - привязка к точкам маршрута
-        const currentPoint = POINTS[currentIndex];
-        const distance = getDistanceFromLatLonInM(currentGpsLat, currentGpsLng, currentPoint.lat, currentPoint.lng);
+        let minDist = Infinity;
+        let nearestIdx = currentIndex;
 
-        if (distance <= PROXIMITY_RADIUS) {
-            // Если мы в радиусе и это не та же точка, что играла только что (упрощенно)
-            statusText.textContent = `Вы рядом с точкой ${currentPoint.name}!`;
-            // В реальном приложении нужно избегать повторного запуска, но для демо просто играем
-            // Для простоты: если мы в радиусе, играем. (В продакшене нужен флаг "уже играло")
-            // playAudio(currentPoint.name); 
-            // Закомментировано, чтобы не спамило каждые 10 сек, раскомментируйте для теста
+        POINTS.forEach((p, idx) => {
+            const d = getDistanceFromLatLonInM(currentGpsLat, currentGpsLng, p.lat, p.lng);
+            if (d < minDist) {
+                minDist = d;
+                nearestIdx = idx;
+            }
+        });
+
+        if (minDist <= PROXIMITY_RADIUS && nearestIdx !== currentIndex) {
+            currentIndex = nearestIdx;
+            updateUI();
+            playAudio(POINTS[currentIndex].name);
+            statusText.textContent = `Вы прибыли на остановку: ${POINTS[currentIndex].name}`;
         } else {
-            statusText.textContent = `До точки ${currentPoint.name}: ${Math.round(distance)} м`;
+            statusText.textContent = `Ближайшая остановка: ${POINTS[nearestIdx].name} (${Math.round(minDist)} м)`;
         }
     }
 
-    // Формула гаверсинуса для расстояния
     function getDistanceFromLatLonInM(lat1, lon1, lat2, lon2) {
         const R = 6371000;
         const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -193,53 +194,23 @@
                 currentGpsLat = position.coords.latitude;
                 currentGpsLng = position.coords.longitude;
 
-                // Обновляем маркер пользователя
                 if (userMarker) {
                     userMarker.setLatLng([currentGpsLat, currentGpsLng]);
                 } else {
                     userMarker = L.circleMarker([currentGpsLat, currentGpsLng], {
-                        radius: 6,
-                        fillColor: '#ff0000',
-                        color: '#fff',
-                        weight: 2,
-                        fillOpacity: 1
+                        radius: 6, fillColor: '#ff0000', color: '#fff', weight: 2, fillOpacity: 1
                     }).addTo(map).bindPopup('Вы здесь');
-                }
-                // Если режим авто, ищем ближайшую точку
-                if (isAutoMode) {
-                    // Находим ближайшую точку
-                    let minDist = Infinity;
-                    let nearestIdx = currentIndex;
-                    POINTS.forEach((p, idx) => {
-                        const d = getDistanceFromLatLonInM(currentGpsLat, currentGpsLng, p.lat, p.lng);
-                        if (d < minDist) {
-                            minDist = d;
-                            nearestIdx = idx;
-                        }
-                    });
-                    // Если ближайшая точка изменилась и мы близко, переключаемся
-                    if (nearestIdx !== currentIndex && minDist < PROXIMITY_RADIUS * 2) {
-                        currentIndex = nearestIdx;
-                        updateUI();
-                        playAudio(POINTS[currentIndex].name);
-                    }
                 }
             },
             (error) => {
                 gpsAvailable = false;
                 gpsWarning.style.display = 'block';
-                // Принудительно ставим координаты по умолчанию
                 currentGpsLat = DEFAULT_LAT;
                 currentGpsLng = DEFAULT_LNG;
                 map.setView([DEFAULT_LAT, DEFAULT_LNG], 14);
-                // Добавляем маркер по умолчанию, если его нет
                 if (!userMarker) {
                     userMarker = L.circleMarker([DEFAULT_LAT, DEFAULT_LNG], {
-                        radius: 6,
-                        fillColor: '#ff0000',
-                        color: '#fff',
-                        weight: 2,
-                        fillOpacity: 1
+                        radius: 6, fillColor: '#ff0000', color: '#fff', weight: 2, fillOpacity: 1
                     }).addTo(map).bindPopup('GPS недоступен (координаты по умолчанию)');
                 }
                 statusText.textContent = 'GPS недоступен. Используются координаты по умолчанию.';
@@ -251,21 +222,9 @@
         statusText.textContent = 'Ваш браузер не поддерживает геолокацию.';
     }
 
-    // Запускаем интервал проверки
     setInterval(checkLocationAndPlay, CHECK_INTERVAL);
-
-    // Первоначальная настройка UI
     updateUI();
-    // Предзагрузка голосов (некоторые браузеры требуют взаимодействия)
     window.speechSynthesis.getVoices();
-
-    // Для теста: включаем первую точку при загрузке
-    setTimeout(() => {
-        if (POINTS.length > 0) {
-            // playAudio(POINTS[0].name); // Раскомментируйте для проверки звука при загрузке
-        }
-    }, 1000);
-
 </script>
 </body>
 </html>
