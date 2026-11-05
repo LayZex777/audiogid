@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Аудиогид 343э</title>
+    <!-- Подключаем Leaflet для карты -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: sans-serif; }
+        #map { height: 65vh; width: 100%; }
+        .controls { padding: 15px; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); position: relative; z-index: 1000; }
+        .gps-warning { background: #ffcccc; color: #900; padding: 10px; font-size: 14px; text-align: center; display: none; border-bottom: 1px solid #f00; }
+        .btn-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        button { flex: 1; padding: 15px; font-size: 16px; border: none; border-radius: 8px; background: #007bff; color: white; font-weight: bold; }
+        button:active { background: #0056b3; }
+        button:disabled { background: #ccc; }
+        .info { text-align: center; font-size: 14px; color: #333; margin-top: 5px; }
+        .poi-title { font-weight: bold; color: #007bff; }
+        /* Стили для маркеров */
+        .custom-icon { background: #007bff; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+
+<div id="gps-warning" class="gps-warning">
+    Включите пожалуйста gps в настройках для корректной работы приложения
+</div>
+
+<div id="map"></div>
+
+<div class="controls">
+    <div class="btn-group">
+        <button id="btn-prev" disabled>◀ Назад</button>
+        <button id="btn-next" disabled>Вперед ▶</button>
+    </div>
+    <div class="info" id="status-text">Загрузка...</div>
+    <div class="info" id="current-poi">Текущая точка: —</div>
+</div>
+
+<script>
+    // --- 1. КОНФИГУРАЦИЯ ---
+    const DEFAULT_LAT = 59.877938;
+    const DEFAULT_LNG = 29.923892;
+    const CHECK_INTERVAL = 10000; // 10 секунд
+    const PROXIMITY_RADIUS = 100; // метров
+
+    // Приблизительный маршрут 343э (Ломоносов -> Метро Ветеранов)
+    // Используем интерполяцию, так как точные координаты остановок не предоставлены
+    const startPoint = [59.909, 29.772]; // Ломоносов (примерно)
+    const endPoint = [59.852, 30.115];   // Ст.м. Проспект Ветеранов (примерно)
+    const totalPoints = 15; // Количество точек (через каждые ~2 км)
+
+    // Генерация точек
+    const POINTS = [];
+    for (let i = 0; i < totalPoints; i++) {
+        const ratio = i / (totalPoints - 1);
+        const lat = startPoint[0] + (endPoint[0] - startPoint[0]) * ratio;
+        const lng = startPoint[1] + (endPoint[1] - startPoint[1]) * ratio;
+        POINTS.push({
+            id: i,
+            name: `Точка ${i + 1}`,
+            lat: lat,
+            lng: lng,
+            description: `Аудиоэкскурсия: Точка ${i + 1}`
+        });
+    }
+
+    // --- 2. ИНИЦИАЛИЗАЦИЯ КАРТЫ ---
+    const map = L.map('map').setView([DEFAULT_LAT, DEFAULT_LNG], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // Линия маршрута
+    const routeCoords = POINTS.map(p => [p.lat, p.lng]);
+    L.polyline(routeCoords, { color: '#007bff', weight: 5, opacity: 0.7 }).addTo(map);
+
+    // Маркеры точек
+    const markers = [];
+    POINTS.forEach((p, idx) => {
+        const marker = L.circleMarker([p.lat, p.lng], {
+            radius: 8,
+            fillColor: '#007bff',
+            color: '#fff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8
+        }).addTo(map).bindPopup(`<b>${p.name}</b><br>${p.description}`);
+        markers.push(marker);
+    });
+
+    // Маркер текущего положения пользователя
+    let userMarker = null;
+
+    // --- 3. ЛОГИКА ГЕОЛОКАЦИИ ---
+    let currentGpsLat = DEFAULT_LAT;
+    let currentGpsLng = DEFAULT_LNG;
+    let gpsAvailable = false;
+    let currentIndex = 0; // Индекс текущей выбранной точки
+    let isAutoMode = true; // Флаг автоматического режима
+
+    const gpsWarning = document.getElementById('gps-warning');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const statusText = document.getElementById('status-text');
+    const currentPoiText = document.getElementById('current-poi');
+
+    // Функция обновления интерфейса
+    function updateUI() {
+        currentPoiText.innerHTML = `<span class="poi-title">${POINTS[currentIndex].name}</span>`;
+        btnPrev.disabled = (currentIndex === 0);
+        btnNext.disabled = (currentIndex === POINTS.length - 1);
+        // Центрируем карту на текущей точке
+        map.setView([POINTS[currentIndex].lat, POINTS[currentIndex].lng], 14);
+    }
+
+    // Инициализация кнопок
+    btnNext.addEventListener('click', () => {
+        if (currentIndex < POINTS.length - 1) {
+            isAutoMode = false; // Ручной режим
+            currentIndex++;
+            updateUI();
+        }
+    });
+
+    btnPrev.addEventListener('click', () => {
+        if (currentIndex > 0) {
+            isAutoMode = false;
+            currentIndex--;
+            updateUI();
+        }
+    });
+
+    // Функция озвучивания (заглушка)
+    function playAudio(pointName) {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel(); // Останавливаем предыдущую речь
+            const utterance = new SpeechSynthesisUtterance(pointName);
+            utterance.lang = 'ru-RU';
+            utterance.rate = 0.9;
+            // Пытаемся выбрать женский голос, если доступен
+            const voices = window.speechSynthesis.getVoices();
+            const femaleVoice = voices.find(v => v.lang.includes('ru') && v.name.toLowerCase().includes('female')) || 
+                                voices.find(v => v.lang.includes('ru'));
+            if (femaleVoice) utterance.voice = femaleVoice;
+            window.speechSynthesis.speak(utterance);
+        } else {
+            console.log('Синтез речи не поддерживается браузером');
+        }
+    }
+
+    // Проверка координат и автовоспроизведение
+    function checkLocationAndPlay() {
+        if (!gpsAvailable) return;
+
+        // Проверяем, находимся ли мы рядом с текущей точкой (в радиусе 100м)
+        // В реальном приложении здесь лучше проверять все точки, но по ТЗ - привязка к точкам маршрута
+        const currentPoint = POINTS[currentIndex];
+        const distance = getDistanceFromLatLonInM(currentGpsLat, currentGpsLng, currentPoint.lat, currentPoint.lng);
+
+        if (distance <= PROXIMITY_RADIUS) {
+            // Если мы в радиусе и это не та же точка, что играла только что (упрощенно)
+            statusText.textContent = `Вы рядом с точкой ${currentPoint.name}!`;
+            // В реальном приложении нужно избегать повторного запуска, но для демо просто играем
+            // Для простоты: если мы в радиусе, играем. (В продакшене нужен флаг "уже играло")
+            // playAudio(currentPoint.name); 
+            // Закомментировано, чтобы не спамило каждые 10 сек, раскомментируйте для теста
+        } else {
+            statusText.textContent = `До точки ${currentPoint.name}: ${Math.round(distance)} м`;
+        }
+    }
+
+    // Формула гаверсинуса для расстояния
+    function getDistanceFromLatLonInM(lat1, lon1, lat2, lon2) {
+        const R = 6371000;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    // --- 4. ЗАПУСК ГЕОЛОКАЦИИ ---
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(
+            (position) => {
+                gpsAvailable = true;
+                gpsWarning.style.display = 'none';
+                currentGpsLat = position.coords.latitude;
+                currentGpsLng = position.coords.longitude;
+
+                // Обновляем маркер пользователя
+                if (userMarker) {
+                    userMarker.setLatLng([currentGpsLat, currentGpsLng]);
+                } else {
+                    userMarker = L.circleMarker([currentGpsLat, currentGpsLng], {
+                        radius: 6,
+                        fillColor: '#ff0000',
+                        color: '#fff',
+                        weight: 2,
+                        fillOpacity: 1
+                    }).addTo(map).bindPopup('Вы здесь');
+                }
+                // Если режим авто, ищем ближайшую точку
+                if (isAutoMode) {
+                    // Находим ближайшую точку
+                    let minDist = Infinity;
+                    let nearestIdx = currentIndex;
+                    POINTS.forEach((p, idx) => {
+                        const d = getDistanceFromLatLonInM(currentGpsLat, currentGpsLng, p.lat, p.lng);
+                        if (d < minDist) {
+                            minDist = d;
+                            nearestIdx = idx;
+                        }
+                    });
+                    // Если ближайшая точка изменилась и мы близко, переключаемся
+                    if (nearestIdx !== currentIndex && minDist < PROXIMITY_RADIUS * 2) {
+                        currentIndex = nearestIdx;
+                        updateUI();
+                        playAudio(POINTS[currentIndex].name);
+                    }
+                }
+            },
+            (error) => {
+                gpsAvailable = false;
+                gpsWarning.style.display = 'block';
+                // Принудительно ставим координаты по умолчанию
+                currentGpsLat = DEFAULT_LAT;
+                currentGpsLng = DEFAULT_LNG;
+                map.setView([DEFAULT_LAT, DEFAULT_LNG], 14);
+                // Добавляем маркер по умолчанию, если его нет
+                if (!userMarker) {
+                    userMarker = L.circleMarker([DEFAULT_LAT, DEFAULT_LNG], {
+                        radius: 6,
+                        fillColor: '#ff0000',
+                        color: '#fff',
+                        weight: 2,
+                        fillOpacity: 1
+                    }).addTo(map).bindPopup('GPS недоступен (координаты по умолчанию)');
+                }
+                statusText.textContent = 'GPS недоступен. Используются координаты по умолчанию.';
+            },
+            { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+        );
+    } else {
+        gpsWarning.style.display = 'block';
+        statusText.textContent = 'Ваш браузер не поддерживает геолокацию.';
+    }
+
+    // Запускаем интервал проверки
+    setInterval(checkLocationAndPlay, CHECK_INTERVAL);
+
+    // Первоначальная настройка UI
+    updateUI();
+    // Предзагрузка голосов (некоторые браузеры требуют взаимодействия)
+    window.speechSynthesis.getVoices();
+
+    // Для теста: включаем первую точку при загрузке
+    setTimeout(() => {
+        if (POINTS.length > 0) {
+            // playAudio(POINTS[0].name); // Раскомментируйте для проверки звука при загрузке
+        }
+    }, 1000);
+
+</script>
+</body>
+</html>
